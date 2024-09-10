@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Record mouse and keyboard events for later playback."""
 
+import copy
 import time
 import argparse
 import threading
@@ -34,7 +35,7 @@ class Record:
         ])
 
 
-class Recorder:
+class Recorder:  # pylint: disable=too-many-instance-attributes
     """The Recorder class records mouse and keyboard events."""
 
     def _on_press(self, key) -> None:
@@ -65,6 +66,19 @@ class Recorder:
             self._terminate_cv.wait()
             listener.stop()
 
+    def _update_records(self) -> None:
+        while True:
+            with self._is_recording_lock:
+                if not self._is_recording:
+                    break
+
+            with self._record_lock:
+                self._record.timestamp = time.time()
+                self._record.mouse_pos = pynput.mouse.Controller().position
+                self._records.append(copy.deepcopy(self._record))
+
+            time.sleep(self._rate_sec)
+
     def __init__(self, rate_hz: int) -> None:
         """Initialize the Recorder with the parameter rate.
 
@@ -77,13 +91,18 @@ class Recorder:
                               mouse_pos=None,
                               key=None,
                               button=None)
+        self._records = []
 
+        self._is_recording_lock = threading.Lock()
         self._record_lock = threading.Lock()
         self._terminate_cv = threading.Condition()
+
         self._keypress_thrd = threading.Thread(
             target=self._record_keypress)
         self._click_thrd = threading.Thread(
             target=self._record_click)
+        self._update_thrd = threading.Thread(
+            target=self._update_records)
 
     def start(self) -> None:
         """Begin recording mouse and keyboard events.
@@ -91,12 +110,14 @@ class Recorder:
         Throws
             RuntimeError: When a new recording is initiated without stopping the previous recording.
         """
-        if self._is_recording:
-            raise RuntimeError("recording already in progress")
+        with self._is_recording_lock:
+            if self._is_recording:
+                raise RuntimeError("recording already in progress")
+            self._is_recording = True
 
-        self._is_recording = True
         self._keypress_thrd.start()
         self._click_thrd.start()
+        self._update_thrd.start()
 
     def stop(self) -> None:
         """Stop the current recording.
@@ -104,16 +125,17 @@ class Recorder:
         Throws
             RuntimeError: When stop() is called without a preceding call to start().
         """
-        if not self._is_recording:
-            raise RuntimeError(
-                "Recorder.stop() called but a recording was never started")
-
-        self._is_recording = False
+        with self._is_recording_lock:
+            if not self._is_recording:
+                raise RuntimeError(
+                    "Recorder.stop() called but a recording was never started")
+            self._is_recording = False
 
         with self._terminate_cv:
             self._terminate_cv.notify_all()
         self._keypress_thrd.join()
         self._click_thrd.join()
+        self._update_thrd.join()
 
 
 if __name__ == '__main__':
