@@ -37,6 +37,34 @@ class Record:
 class Recorder:
     """The Recorder class records mouse and keyboard events."""
 
+    def _on_press(self, key) -> None:
+        try:
+            with self._record_lock:
+                self._record.key = key.char
+        except AttributeError:
+            with self._record_lock:
+                # Capture special keys (e.g., shift, ctrl).
+                self._record.key = str(key)
+
+    def _record_keypress(self) -> None:
+        with self._terminate_cv:
+            listener = pynput.keyboard.Listener(on_press=self._on_press)
+            listener.start()
+            self._terminate_cv.wait()
+            listener.stop()
+
+    def _on_click(self, x, y, button, pressed) -> None:  # pylint: disable=unused-argument
+        if pressed:
+            with self._record_lock:
+                self._record.button = button
+
+    def _record_click(self) -> None:
+        with self._terminate_cv:
+            listener = pynput.mouse.Listener(on_click=self._on_click)
+            listener.start()
+            self._terminate_cv.wait()
+            listener.stop()
+
     def __init__(self, rate_hz: int) -> None:
         """Initialize the Recorder with the parameter rate.
 
@@ -49,23 +77,13 @@ class Recorder:
                               mouse_pos=None,
                               key=None,
                               button=None)
+
+        self._record_lock = threading.Lock()
         self._terminate_cv = threading.Condition()
         self._keypress_thrd = threading.Thread(
-            target=self._record_last_keypress)
-
-    def _on_press(self, key) -> None:
-        try:
-            self._record.key = key.char
-        except AttributeError:
-            # Capture special keys (e.g., shift, ctrl).
-            self._record.key = str(key)
-
-    def _record_last_keypress(self) -> None:
-        with self._terminate_cv:
-            listener = pynput.keyboard.Listener(on_press=self._on_press)
-            listener.start()
-            self._terminate_cv.wait()
-            listener.stop()
+            target=self._record_keypress)
+        self._click_thrd = threading.Thread(
+            target=self._record_click)
 
     def start(self) -> None:
         """Begin recording mouse and keyboard events.
@@ -78,6 +96,7 @@ class Recorder:
 
         self._is_recording = True
         self._keypress_thrd.start()
+        self._click_thrd.start()
 
     def stop(self) -> None:
         """Stop the current recording.
@@ -94,6 +113,7 @@ class Recorder:
         with self._terminate_cv:
             self._terminate_cv.notify_all()
         self._keypress_thrd.join()
+        self._click_thrd.join()
 
 
 if __name__ == '__main__':
