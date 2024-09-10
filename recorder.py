@@ -104,6 +104,8 @@ if __name__ == '__main__':
                         help="duration of the recording session in minutes")
     parser.add_argument("--rate-hz", "-r", type=int, default=100,
                         help="rate at which events are recorded in Hertz")
+    parser.add_argument("--start-delay-sec", "-d", type=int,
+                        help="number of seconds by which to delay the start of a recording")
     args = parser.parse_args()
 
     recorder = Recorder(args.rate_hz)
