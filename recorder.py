@@ -137,6 +137,25 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         self._click_thrd.join()
         self._update_thrd.join()
 
+    def save(self) -> None:
+        """Save all records to disk.
+
+        Throws
+            RuntimeError: When save() is called during an active 
+            recording session or when there are no records to save.
+        """
+        with self._is_recording_lock:
+            if self._is_recording:
+                raise RuntimeError("failed to save, recording in progress")
+        if not self._records:
+            raise RuntimeError("failed to save, no data has been recorded")
+
+        outfile = time.strftime("%Y%m%d-%H%M%S") + "_recording.mr"
+        with open(outfile, "w", encoding="ascii") as file:
+            for r in self._records:
+                # TODO: Need to think through serializing the data.
+                file.write(f"{r}\n")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -156,3 +175,4 @@ if __name__ == '__main__':
     time.sleep(5)
     print("stopping recorder...")
     recorder.stop()
+    recorder.save()
