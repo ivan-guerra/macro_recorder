@@ -48,6 +48,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
                 self._record.key = str(key)
 
     def _record_keypress(self) -> None:
+        # TODO: Make it so we only record key releases not presses.
         with self._terminate_cv:
             listener = pynput.keyboard.Listener(on_press=self._on_press)
             listener.start()
@@ -82,7 +83,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
     def __init__(self, rate_hz: int) -> None:
         """Initialize the Recorder with the parameter rate.
 
-        Args 
+        Args
             rate_hz: The rate in Hertz at which state will be recorded.
         """
         self._rate_sec = 1.0 / rate_hz
@@ -141,7 +142,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         """Save all records to disk.
 
         Throws
-            RuntimeError: When save() is called during an active 
+            RuntimeError: When save() is called during an active
             recording session or when there are no records to save.
         """
         with self._is_recording_lock:
@@ -161,18 +162,35 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="record the mouse and keyboard",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("duration-min", type=int,
+    parser.add_argument("duration", type=int,
                         help="duration of the recording session in minutes")
     parser.add_argument("--rate-hz", "-r", type=int, default=100,
                         help="rate at which events are recorded in Hertz")
-    parser.add_argument("--start-delay-sec", "-d", type=int,
+    parser.add_argument("--start-delay-sec", "-d", type=int, default=0,
                         help="number of seconds by which to delay the start of a recording")
     args = parser.parse_args()
 
-    recorder = Recorder(args.rate_hz)
-    recorder.start()
-    print("going to sleep...")
-    time.sleep(5)
-    print("stopping recorder...")
-    recorder.stop()
-    recorder.save()
+    try:
+        if args.duration <= 0:
+            raise ValueError("duration must be a positive integer")
+        if args.rate_hz <= 0:
+            raise ValueError("rate_hz must be a positive integer")
+        if args.start_delay_sec < 0:
+            raise ValueError("start_delay_sec must be >= 0")
+
+        time.sleep(args.start_delay_sec)
+
+        recorder = Recorder(args.rate_hz)
+        recorder.start()
+        time.sleep(args.duration * 60)
+        recorder.stop()
+        recorder.save()
+    except KeyboardInterrupt:
+        recorder.stop()
+
+        answer = input(
+            "recording interrupted, would you like to save all events [y/n]? ")
+        if answer == "y":
+            recorder.save()
+    except (RuntimeError, ValueError) as e:
+        print(f"error: {e}")
