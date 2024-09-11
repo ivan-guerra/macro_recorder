@@ -25,6 +25,13 @@ class Record:
     key: str
     button: str
 
+    def clear(self) -> None:
+        """Clear the contents of this Record."""
+        self.timestamp = None
+        self.mouse_pos = None
+        self.key = None
+        self.button = None
+
     def __str__(self) -> str:
         """Return this Record's string representation."""
         return ",".join([
@@ -38,7 +45,7 @@ class Record:
 class Recorder:  # pylint: disable=too-many-instance-attributes
     """The Recorder class records mouse and keyboard events."""
 
-    def _on_press(self, key) -> None:
+    def _on_release(self, key) -> None:
         try:
             with self._record_lock:
                 self._record.key = key.char
@@ -48,9 +55,8 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
                 self._record.key = str(key)
 
     def _record_keypress(self) -> None:
-        # TODO: Make it so we only record key releases not presses.
         with self._terminate_cv:
-            listener = pynput.keyboard.Listener(on_press=self._on_press)
+            listener = pynput.keyboard.Listener(on_release=self._on_release)
             listener.start()
             self._terminate_cv.wait()
             listener.stop()
@@ -77,6 +83,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
                 self._record.timestamp = time.time()
                 self._record.mouse_pos = pynput.mouse.Controller().position
                 self._records.append(copy.deepcopy(self._record))
+                self._record.clear()
 
             time.sleep(self._rate_sec)
 
