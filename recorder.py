@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Record mouse and keyboard events for later playback."""
+"""Record mouse and keyboard events for later playback.
+
+This script allows the user to record key releases, mouse clicks, and mouse
+movement. The script takes command line options that allow the user to adjust
+the duration of the recording as well the frequency at which events are
+captured. Each recording is output as an ASCII text file with the *.mr
+extension. The output file is meant to be used as an argument to recorder.py's
+companion script: playback.py. To see script usage and all available command
+line options run: recorder.py -h/--help
+"""
 
 import copy
 import time
@@ -11,7 +20,7 @@ import pynput
 
 @dataclass
 class Record:
-    """Representation of a macro event.
+    """Representation of a single recording event.
 
     Fields
         timestamp: The number of seconds since the Epoch.
@@ -91,7 +100,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         """Initialize the Recorder with the parameter rate.
 
         Args
-            rate_hz: The rate in Hertz at which state will be recorded.
+            rate_hz: The rate in Hertz at which records will be recorded.
         """
         self._rate_sec = 1.0 / rate_hz
         self._is_recording = False
@@ -136,7 +145,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         with self._is_recording_lock:
             if not self._is_recording:
                 raise RuntimeError(
-                    "Recorder.stop() called but a recording was never started")
+                    "stop called but a recording was never started")
             self._is_recording = False
 
         with self._terminate_cv:
@@ -149,19 +158,22 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         """Save all records to disk.
 
         Throws
-            RuntimeError: When save() is called during an active
-            recording session or when there are no records to save.
+            RuntimeError: When save() is called during an active recording
+            session or when there are no records to save.
         """
         with self._is_recording_lock:
             if self._is_recording:
                 raise RuntimeError("failed to save, recording in progress")
+
+        # We don't need to synchronize access to self._records with the update
+        # thread since it is guaranteed the Recorder instance was stopped
+        # before reaching this point in the code.
         if not self._records:
             raise RuntimeError("failed to save, no data has been recorded")
 
         outfile = time.strftime("%Y%m%d-%H%M%S") + "_recording.mr"
         with open(outfile, "w", encoding="ascii") as file:
             for r in self._records:
-                # TODO: Need to think through serializing the data.
                 file.write(f"{r}\n")
 
 
