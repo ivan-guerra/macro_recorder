@@ -4,10 +4,9 @@
 This script allows the user to record key releases, mouse clicks, and mouse
 movement. The script takes command line options that allow the user to adjust
 the duration of the recording as well the frequency at which events are
-captured. Each recording is output as an ASCII text file with the *.mr
-extension. The output file is meant to be used as an argument to recorder.py's
-companion script: playback.py. To see script usage and all available command
-line options run: recorder.py -h/--help
+captured. Each recording is output as a CSV file. The output file is meant to
+be used as an argument to recorder.py's companion script: playback.py. To see
+script usage and all available command line options run: recorder.py -h/--help
 """
 
 import copy
@@ -171,7 +170,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         if not self._records:
             raise RuntimeError("failed to save, no data has been recorded")
 
-        outfile = time.strftime("%Y%m%d-%H%M%S") + "_recording.mr"
+        outfile = time.strftime("%Y%m%d-%H%M%S") + "_recording.csv"
         with open(outfile, "w", encoding="ascii") as file:
             file.write(
                 ",".join(["timestamp", "mouse_x", "mouse_y",
