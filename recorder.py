@@ -173,8 +173,13 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
 
         outfile = time.strftime("%Y%m%d-%H%M%S") + "_recording.mr"
         with open(outfile, "w", encoding="ascii") as file:
+            file.write(
+                ",".join(["timestamp", "mouse_x", "mouse_y",
+                         "keypressed", "button_clicked"])
+                + "\n")
             for r in self._records:
-                file.write(f"{r}\n")
+                line = f"{r.timestamp},{r.mouse_pos[0]},{r.mouse_pos[1]},{r.key},{r.button}"
+                file.write(f"{line}\n")
 
 
 if __name__ == '__main__':
