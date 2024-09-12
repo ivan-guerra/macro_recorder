@@ -32,8 +32,20 @@ def execute_event(record: Record) -> None:
     # Setting PAUSE to 0 disables this feature.
     pyautogui.PAUSE = 0
 
+    screen_width, screen_height = pyautogui.size()
+    if not 0 <= record.mouse_pos[0] < screen_width:
+        raise ValueError(
+            f"mouse x coordinate {record.mouse_pos[0]} out of range [0,{screen_width}]")
+    if not 0 <= record.mouse_pos[1] < screen_height:
+        raise ValueError(
+            f"mouse y coordinate {record.mouse_pos[1]} out of range [0,{screen_height}]")
     pyautogui.moveTo(record.mouse_pos)
-    # TODO: Execute click.
+
+    if not record.button in ["None", "Button.left", "Button.right", "Button.middle"]:
+        raise ValueError(f"unknown button type '{record.button}'")
+    if record.button != "None":
+        pyautogui.click(button=record.button.removeprefix("Button."))
+
     # TODO: Execute keypress.
 
 
