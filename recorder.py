@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Record mouse and keyboard events for later playback.
 
-This script allows the user to record key releases, mouse clicks, and mouse
+This script allows the user to record keystrokes, mouse clicks, and mouse
 movement. The script takes command line options that allow the user to adjust
 the duration of the recording as well the frequency at which events are
-captured. Each recording is output as a CSV file. The output file is meant to
+captured. Each recording is output as a JSON file. The output file is meant to
 be used as an argument to recorder.py's companion script: playback.py. To see
 script usage and all available command line options run: recorder.py -h/--help
 """
 
+import json
 import copy
 import time
 import argparse
@@ -24,20 +25,20 @@ class Record:
     Fields
         timestamp: The number of seconds since the Epoch.
         mouse_pos: (x, y) position of the mouse.
-        key: The key that was pressed. None if no key was pressed.
+        key: A list representing a key combination.
         button: The mouse button that was clicked. None if no button was clicked.
     """
 
     timestamp: int
     mouse_pos: tuple[int]
-    key: str
+    keys: list[str]
     button: str
 
     def clear(self) -> None:
         """Clear the contents of this Record."""
         self.timestamp = None
         self.mouse_pos = None
-        self.key = None
+        self.keys = None
         self.button = None
 
     def __str__(self) -> str:
@@ -45,7 +46,7 @@ class Record:
         return ",".join([
             f"timestamp={self.timestamp}",
             f"mouse_pos={self.mouse_pos}",
-            f"key={self.key}",
+            f"key={self.keys}",
             f"button={self.button}",
         ])
 
@@ -53,18 +54,33 @@ class Record:
 class Recorder:  # pylint: disable=too-many-instance-attributes
     """The Recorder class records mouse and keyboard events."""
 
-    def _on_release(self, key) -> None:
+    def _on_release(self, key) -> None:  # pylint: disable=unused-argument
         try:
-            with self._record_lock:
-                self._record.key = key.char
+            with self._active_keys_lock:
+                with self._record_lock:
+                    if self._active_keys:
+                        self._record.keys = copy.deepcopy(self._active_keys)
+                        self._active_keys.pop()
         except AttributeError:
-            with self._record_lock:
+            with self._active_keys_lock:
+                with self._record_lock:
+                    if self._active_keys:
+                        self._record.keys = copy.deepcopy(self._active_keys)
+                        self._active_keys.pop()
+
+    def _on_press(self, key) -> None:
+        try:
+            with self._active_keys_lock:
+                self._active_keys.append(str(key.char))
+        except AttributeError:
+            with self._active_keys_lock:
                 # Capture special keys (e.g., shift, ctrl).
-                self._record.key = str(key)
+                self._active_keys.append(str(key))
 
     def _record_keypress(self) -> None:
         with self._terminate_cv:
-            listener = pynput.keyboard.Listener(on_release=self._on_release)
+            listener = pynput.keyboard.Listener(
+                on_press=self._on_press, on_release=self._on_release)
             listener.start()
             self._terminate_cv.wait()
             listener.stop()
@@ -105,12 +121,14 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         self._is_recording = False
         self._record = Record(timestamp=None,
                               mouse_pos=None,
-                              key=None,
+                              keys=None,
                               button=None)
         self._records = []
+        self._active_keys = []
 
         self._is_recording_lock = threading.Lock()
         self._record_lock = threading.Lock()
+        self._active_keys_lock = threading.Lock()
         self._terminate_cv = threading.Condition()
 
         self._keypress_thrd = threading.Thread(
@@ -170,15 +188,19 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         if not self._records:
             raise RuntimeError("failed to save, no data has been recorded")
 
-        outfile = time.strftime("%Y%m%d-%H%M%S") + "_recording.csv"
+        outfile = time.strftime("%Y%m%d-%H%M%S") + "_recording.json"
         with open(outfile, "w", encoding="ascii") as file:
-            file.write(
-                ",".join(["timestamp", "mouse_x", "mouse_y",
-                         "keypressed", "button_clicked"])
-                + "\n")
+            record_dicts = []
             for r in self._records:
-                line = f"{r.timestamp},{r.mouse_pos[0]},{r.mouse_pos[1]},{r.key},{r.button}"
-                file.write(f"{line}\n")
+                record_dict = {
+                    "timestamp": r.timestamp,
+                    "mouse_pos": r.mouse_pos,
+                    "button": str(r.button),
+                    "keys": r.keys
+                }
+                record_dicts.append(record_dict)
+            output = {"records": record_dicts}
+            json.dump(output, file, indent=2)
 
 
 if __name__ == '__main__':

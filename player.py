@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Playback a mouse/keyboard recording captured with recorder.py.
 
-To see script usage and all available command line options run: 
+To see script usage and all available command line options run:
 player.py -h/--help
 """
 
-import csv
+import json
 import time
 import argparse
 import pynput
@@ -15,19 +15,18 @@ from recorder import Record
 
 def deserialize_records(record_file: str) -> list[Record]:
     """Read a list of Record objects from the paramater *.mr file."""
-    records = []  # pylint: disable=redefined-outer-name
-    expected_num_cols = 5
-
+    data = None
     with open(record_file, "r", encoding="ascii") as file:
-        csv_reader = csv.reader(file)
-        next(csv_reader)  # Skip the CSV column header.
-        for row in csv_reader:
-            if len(row) != expected_num_cols:
-                raise ValueError(
-                    f"invalid number of fields, expected {expected_num_cols} got {len(row)}: {row}")
-            records.append(
-                Record(float(row[0]), (int(row[1]), int(row[2])), row[3], row[4]))
+        data = json.load(file)
 
+    records = []  # pylint: disable=redefined-outer-name
+    for record in data["records"]:
+        records.append(Record(
+            record["timestamp"],
+            record["mouse_pos"],
+            record["keys"],
+            record["button"],
+        ))
     return records
 
 
@@ -59,16 +58,19 @@ def execute_event(record: Record) -> None:
             f"mouse y coordinate {record.mouse_pos[1]} out of range [0,{screen_height}]")
     pyautogui.moveTo(record.mouse_pos)
 
-    if not record.button in ["None", "Button.left", "Button.right", "Button.middle"]:
-        raise ValueError(f"unknown button type '{record.button}'")
     if record.button != "None":
-        pyautogui.click(button=record.button.removeprefix("Button."))
+        if record.button in ["Button.left", "Button.right", "Button.middle"]:
+            pyautogui.click(button=record.button.removeprefix("Button."))
+        else:
+            raise ValueError(f"unknown button type '{record.button}'")
 
-    if record.key != "None":
-        key = get_key(record.key)
+    if record.keys:
+        keys = [get_key(key) for key in record.keys]
         keyboard = pynput.keyboard.Controller()
-        keyboard.press(key)
-        keyboard.release(key)
+        for k in keys:
+            keyboard.press(k)
+        for k in keys:
+            keyboard.release(k)
 
 
 def playback(records: list[Record], speed: float) -> None:  # pylint: disable=redefined-outer-name
