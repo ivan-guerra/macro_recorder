@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Temp."""
+"""Playback a mouse/keyboard recording captured with recorder.py.
+
+To see script usage and all available command line options run: 
+player.py -h/--help
+"""
 
 import csv
 import time
 import argparse
+import pynput
 import pyautogui
 from recorder import Record
 
@@ -26,6 +31,19 @@ def deserialize_records(record_file: str) -> list[Record]:
     return records
 
 
+def get_key(key_str: str):
+    """Return the pynput key object corresponding to the input string."""
+    # For normal alphabetic characters, we return the character itself
+    if len(key_str) == 1:
+        return key_str
+
+    # If it's a special key, we return the corresponding Key object from the Key class
+    if key_str.startswith("Key."):
+        return getattr(pynput.keyboard.Key, key_str.split('.')[1])
+
+    return key_str
+
+
 def execute_event(record: Record) -> None:
     """Execute the parameter record object."""
     # pyautogui automatically inserts an ~50ms delay on each mouse movement.
@@ -46,7 +64,11 @@ def execute_event(record: Record) -> None:
     if record.button != "None":
         pyautogui.click(button=record.button.removeprefix("Button."))
 
-    # TODO: Execute keypress.
+    if record.key != "None":
+        key = get_key(record.key)
+        keyboard = pynput.keyboard.Controller()
+        keyboard.press(key)
+        keyboard.release(key)
 
 
 def playback(records: list[Record], speed: float) -> None:  # pylint: disable=redefined-outer-name
@@ -76,7 +98,7 @@ if __name__ == '__main__':
     try:
         records = deserialize_records(args.record_file)
         playback(records, args.speed)
-    except (FileNotFoundError, ValueError) as e:
+    except (FileNotFoundError, ValueError, AttributeError) as e:
         print(f"error: {e}")
     except KeyboardInterrupt:
         pass
