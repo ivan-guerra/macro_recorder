@@ -43,7 +43,7 @@ def get_key(key_str: str):
     return key_str
 
 
-def execute_event(record: Record) -> None:
+def execute_event(record: Record, keypress_cache: dict[str, float]) -> None:
     """Execute the parameter record object."""
     # pyautogui automatically inserts an ~50ms delay on each mouse movement.
     # Setting PAUSE to 0 disables this feature.
@@ -65,25 +65,40 @@ def execute_event(record: Record) -> None:
             raise ValueError(f"unknown button type '{record.button}'")
 
     if record.keys:
-        keys = [get_key(key) for key in record.keys]
+        # To avoid pressing duplicate keys, we must filter keypresses by
+        # timestamp. A few special keys are exempt from timestamp filtering.
+        key_strs = []
+        exempt_keys = ["Key.ctrl", "Key.alt", "Key.shift", "Key.cmd"]
+        for key in record.keys:
+            key_str, timestamp = key[0], key[1]
+            if key_str in exempt_keys:
+                key_strs.append(key_str)
+            elif not key_str in keypress_cache or timestamp > keypress_cache[key_str]:
+                keypress_cache[key_str] = timestamp
+                key_strs.append(key_str)
+
+        # Press and release the key combo.
         keyboard = pynput.keyboard.Controller()
-        for k in keys:
-            keyboard.press(k)
-        for k in keys:
-            keyboard.release(k)
+        for k in key_strs:
+            key_obj = get_key(k)
+            keyboard.press(key_obj)
+        for k in key_strs:
+            key_obj = get_key(k)
+            keyboard.release(key_obj)
 
 
 def playback(records: list[Record], speed: float) -> None:  # pylint: disable=redefined-outer-name
     """Playback a set of mouse/keyboard records at the paramater playback speed."""
+    keypress_cache = {}
     for i in range(1, len(records)):
         curr_event = records[i - 1]
         next_event = records[i]
         dt = next_event.timestamp - curr_event.timestamp
 
-        execute_event(curr_event)
+        execute_event(curr_event, keypress_cache)
         time.sleep(dt / speed)
 
-    execute_event(records[-1])
+    execute_event(records[-1], keypress_cache)
 
 
 if __name__ == '__main__':

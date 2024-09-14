@@ -25,13 +25,14 @@ class Record:
     Fields
         timestamp: The number of seconds since the Epoch.
         mouse_pos: (x, y) position of the mouse.
-        key: A list of one or more actively pressed keys.
+        key: A list of one or more actively pressed keys and a timestamp of
+        when they were pressed.
         button: The mouse button clicked.
     """
 
     timestamp: float
     mouse_pos: tuple[int]
-    keys: list[str]
+    keys: list[tuple[str, int]]
     button: str
 
     def clear(self) -> None:
@@ -60,9 +61,8 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
                 with self._record_lock:
                     if self._active_keys:
                         self._record.keys = copy.deepcopy(self._active_keys)
-                        # Filter out all instances of the released key.
                         self._active_keys = [
-                            x for x in self._active_keys if x != key_str]
+                            x for x in self._active_keys if x[0] != key_str]
 
         try:
             update_keys(str(key.char))
@@ -73,20 +73,23 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         try:
             # Capture single character keys.
             with self._active_keys_lock:
-                self._active_keys.append(str(key.char))
+                self._active_keys.append((str(key.char), time.time()))
         except AttributeError:
             with self._active_keys_lock:
                 # Capture special keys (e.g., shift, ctrl).
-                self._active_keys.append(str(key))
+                self._active_keys.append((str(key), time.time()))
 
     def _record_keypress(self) -> None:
         with self._terminate_cv:
             press_listener = pynput.keyboard.Listener(on_press=self._on_press)
             release_listener = pynput.keyboard.Listener(
                 on_release=self._on_release)
+
             press_listener.start()
             release_listener.start()
+
             self._terminate_cv.wait()
+
             press_listener.stop()
             release_listener.stop()
 
