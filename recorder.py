@@ -30,12 +30,15 @@ class Record:
         button: A tuple where the first element is the mouse button that is
         interacted with and the second element is a boolean indicating whether
         the button was pressed (true) or released (false).
+        scroll: A tuple where the first element is the horizontal scroll and
+        the second element is the vertical scroll.
     """
 
     timestamp: float
     mouse_pos: tuple[int]
     keys: list[tuple[str, int]]
     button: tuple[str, bool]
+    scroll: tuple[int, int]
 
     def clear(self) -> None:
         """Clear the contents of this Record object."""
@@ -43,6 +46,7 @@ class Record:
         self.mouse_pos = None
         self.keys = None
         self.button = None
+        self.scroll = None
 
     def __str__(self) -> str:
         """Return this Record's string representation."""
@@ -51,6 +55,7 @@ class Record:
             f"mouse_pos={self.mouse_pos}",
             f"key={self.keys}",
             f"button={self.button}",
+            f"scroll={self.scroll}",
         ])
 
 
@@ -81,7 +86,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
                 # Capture special keys (e.g., shift, ctrl).
                 self._active_keys.append((str(key), time.time()))
 
-    def _record_keypress(self) -> None:
+    def _record_key_events(self) -> None:
         with self._terminate_cv:
             press_listener = pynput.keyboard.Listener(on_press=self._on_press)
             release_listener = pynput.keyboard.Listener(
@@ -99,12 +104,25 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         with self._record_lock:
             self._record.button = (str(button), pressed)
 
-    def _record_click(self) -> None:
+    def _on_scroll(self, x, y, dx, dy) -> None:  # pylint: disable=unused-argument
+        with self._record_lock:
+            if dy > 0 or dy < 0:
+                self._record.scroll = (0, dy)
+            if dx > 0 or dx < 0:
+                self._record.scroll = (dx, 0)
+
+    def _record_mouse_events(self) -> None:
         with self._terminate_cv:
-            listener = pynput.mouse.Listener(on_click=self._on_click)
-            listener.start()
+            click_listener = pynput.mouse.Listener(on_click=self._on_click)
+            scroll_listener = pynput.mouse.Listener(on_scroll=self._on_scroll)
+
+            click_listener.start()
+            scroll_listener.start()
+
             self._terminate_cv.wait()
-            listener.stop()
+
+            click_listener.stop()
+            scroll_listener.stop()
 
     def _update_records(self) -> None:
         while True:
@@ -131,7 +149,8 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         self._record = Record(timestamp=None,
                               mouse_pos=None,
                               keys=None,
-                              button=None)
+                              button=None,
+                              scroll=None)
         self._records = []
         self._active_keys = []
 
@@ -141,9 +160,9 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         self._terminate_cv = threading.Condition()
 
         self._keypress_thrd = threading.Thread(
-            target=self._record_keypress)
+            target=self._record_key_events)
         self._click_thrd = threading.Thread(
-            target=self._record_click)
+            target=self._record_mouse_events)
         self._update_thrd = threading.Thread(
             target=self._update_records)
 
@@ -205,7 +224,8 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
                     "timestamp": r.timestamp,
                     "mouse_pos": r.mouse_pos,
                     "button": r.button,
-                    "keys": r.keys
+                    "keys": r.keys,
+                    "scroll": r.scroll
                 }
                 record_dicts.append(record_dict)
             output = {"records": record_dicts}

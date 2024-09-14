@@ -54,6 +54,17 @@ def _click_button(button: tuple[str, bool]) -> None:
         raise ValueError(f"unknown button type '{button}'")
 
 
+def _scroll(scroll: tuple[int, int]) -> None:
+    if not scroll:
+        return
+
+    dx, dy = scroll[0], scroll[1]
+    if dy != 0:
+        pyautogui.scroll(dy)
+    if dx != 0:
+        pyautogui.hscroll(dx)
+
+
 def _press_and_release_key_combo(keys: list[tuple[str, float]],
                                  keypress_cache: dict[str, float]) -> None:
     if not keys:
@@ -84,6 +95,7 @@ def _press_and_release_key_combo(keys: list[tuple[str, float]],
 def _execute_event(record: Record, keypress_cache: dict[str, float]) -> None:
     _move_mouse(record.mouse_pos)
     _click_button(record.button)
+    _scroll(record.scroll)
     _press_and_release_key_combo(record.keys, keypress_cache)
 
 
@@ -100,6 +112,7 @@ def deserialize_records(record_file: str) -> list[Record]:
             record["mouse_pos"],
             record["keys"],
             record["button"],
+            record["scroll"],
         ))
     return records
 
