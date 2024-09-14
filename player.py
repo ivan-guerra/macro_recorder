@@ -14,11 +14,11 @@ from recorder import Record
 
 
 def _get_key(key_str: str):
-    # For normal alphabetic characters, we return the character itself
+    # For normal alphabetic characters, we return the character itself.
     if len(key_str) == 1:
         return key_str
 
-    # If it's a special key, we return the corresponding Key object from the Key class
+    # If it's a special key, we return the corresponding Key object from the Key class.
     if key_str.startswith("Key."):
         return getattr(pynput.keyboard.Key, key_str.split('.')[1])
 
@@ -44,9 +44,9 @@ def _click_button(button: tuple[str, bool]) -> None:
     if not button:
         return
 
-    button_str, pressed = button[0], button[1]
+    button_str, is_pressed = button[0], button[1]
     if button_str in ["Button.left", "Button.right", "Button.middle"]:
-        if pressed:
+        if is_pressed:
             pyautogui.mouseDown(button=button_str.removeprefix("Button."))
         else:
             pyautogui.mouseUp(button=button_str.removeprefix("Button."))

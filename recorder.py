@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Record mouse and keyboard events for later playback.
 
-This script allows the user to record keystrokes, mouse clicks, and mouse
-movement. The script takes command line options that allow the user to adjust
-the duration of the recording as well the frequency at which events are
-captured. Each recording is output as a JSON file. The output file is meant to
-be used as an argument to recorder.py's companion script: playback.py. To see
-script usage and all available command line options run: recorder.py -h/--help
+This script allows the user to record key and mouse events. The script takes
+command line options that allow the user to adjust the duration of the
+recording as well the frequency at which events are captured. Each recording is
+output as a JSON file. The output file is meant to be used as an argument to
+recorder.py's companion script: playback.py. To see script usage and all
+available command line options run: recorder.py -h/--help
 """
 
 import json
@@ -25,13 +25,13 @@ class Record:
     Fields
         timestamp: The number of seconds since the Epoch.
         mouse_pos: (x, y) position of the mouse.
-        key: A list of one or more actively pressed keys and a timestamp of
-        when they were pressed.
+        key: A list of tuples where the first element is the actively pressed
+        key and the second element is a timestamp of when the key was pressed.
         button: A tuple where the first element is the mouse button that is
         interacted with and the second element is a boolean indicating whether
         the button was pressed (true) or released (false).
-        scroll: A tuple where the first element is the horizontal scroll and
-        the second element is the vertical scroll.
+        scroll: A tuple where the first element is the horizontal scroll delta
+        and the second element is the vertical scroll delta.
     """
 
     timestamp: float
@@ -47,16 +47,6 @@ class Record:
         self.keys = None
         self.button = None
         self.scroll = None
-
-    def __str__(self) -> str:
-        """Return this Record's string representation."""
-        return ",".join([
-            f"timestamp={self.timestamp}",
-            f"mouse_pos={self.mouse_pos}",
-            f"key={self.keys}",
-            f"button={self.button}",
-            f"scroll={self.scroll}",
-        ])
 
 
 class Recorder:  # pylint: disable=too-many-instance-attributes
@@ -100,9 +90,9 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
             press_listener.stop()
             release_listener.stop()
 
-    def _on_click(self, x, y, button, pressed) -> None:  # pylint: disable=unused-argument
+    def _on_click(self, x, y, button, is_pressed) -> None:  # pylint: disable=unused-argument
         with self._record_lock:
-            self._record.button = (str(button), pressed)
+            self._record.button = (str(button), is_pressed)
 
     def _on_scroll(self, x, y, dx, dy) -> None:  # pylint: disable=unused-argument
         with self._record_lock:
@@ -195,6 +185,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
 
         with self._terminate_cv:
             self._terminate_cv.notify_all()
+
         self._keypress_thrd.join()
         self._click_thrd.join()
         self._update_thrd.join()
@@ -256,7 +247,9 @@ if __name__ == '__main__':
 
         recorder = Recorder(args.rate_hz)
         recorder.start()
+
         time.sleep(args.duration * 60)
+
         recorder.stop()
         recorder.save()
     except KeyboardInterrupt:
