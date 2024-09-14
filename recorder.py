@@ -27,13 +27,15 @@ class Record:
         mouse_pos: (x, y) position of the mouse.
         key: A list of one or more actively pressed keys and a timestamp of
         when they were pressed.
-        button: The mouse button clicked.
+        button: A tuple where the first element is the mouse button that is
+        interacted with and the second element is a boolean indicating whether
+        the button was pressed (true) or released (false).
     """
 
     timestamp: float
     mouse_pos: tuple[int]
     keys: list[tuple[str, int]]
-    button: str
+    button: tuple[str, bool]
 
     def clear(self) -> None:
         """Clear the contents of this Record object."""
@@ -94,9 +96,8 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
             release_listener.stop()
 
     def _on_click(self, x, y, button, pressed) -> None:  # pylint: disable=unused-argument
-        if pressed:
-            with self._record_lock:
-                self._record.button = button
+        with self._record_lock:
+            self._record.button = (str(button), pressed)
 
     def _record_click(self) -> None:
         with self._terminate_cv:
@@ -203,7 +204,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
                 record_dict = {
                     "timestamp": r.timestamp,
                     "mouse_pos": r.mouse_pos,
-                    "button": str(r.button),
+                    "button": r.button,
                     "keys": r.keys
                 }
                 record_dicts.append(record_dict)

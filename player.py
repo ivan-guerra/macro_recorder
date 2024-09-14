@@ -40,12 +40,18 @@ def _move_mouse(mouse_pos: tuple[int]) -> None:
     pyautogui.moveTo(mouse_pos)
 
 
-def _click_button(button: str) -> None:
-    if button != "None":
-        if button in ["Button.left", "Button.right", "Button.middle"]:
-            pyautogui.click(button=button.removeprefix("Button."))
+def _click_button(button: tuple[str, bool]) -> None:
+    if not button:
+        return
+
+    button_str, pressed = button[0], button[1]
+    if button_str in ["Button.left", "Button.right", "Button.middle"]:
+        if pressed:
+            pyautogui.mouseDown(button=button_str.removeprefix("Button."))
         else:
-            raise ValueError(f"unknown button type '{button}'")
+            pyautogui.mouseUp(button=button_str.removeprefix("Button."))
+    else:
+        raise ValueError(f"unknown button type '{button}'")
 
 
 def _press_and_release_key_combo(keys: list[tuple[str, float]],
