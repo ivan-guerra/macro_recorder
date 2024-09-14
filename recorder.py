@@ -81,11 +81,14 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
 
     def _record_keypress(self) -> None:
         with self._terminate_cv:
-            listener = pynput.keyboard.Listener(
-                on_press=self._on_press, on_release=self._on_release)
-            listener.start()
+            press_listener = pynput.keyboard.Listener(on_press=self._on_press)
+            release_listener = pynput.keyboard.Listener(
+                on_release=self._on_release)
+            press_listener.start()
+            release_listener.start()
             self._terminate_cv.wait()
-            listener.stop()
+            press_listener.stop()
+            release_listener.stop()
 
     def _on_click(self, x, y, button, pressed) -> None:  # pylint: disable=unused-argument
         if pressed:
