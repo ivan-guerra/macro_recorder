@@ -25,17 +25,17 @@ class Record:
     Fields
         timestamp: The number of seconds since the Epoch.
         mouse_pos: (x, y) position of the mouse.
-        key: A list representing a key combination.
-        button: The mouse button that was clicked. None if no button was clicked.
+        key: A list of one or more actively pressed keys.
+        button: The mouse button clicked.
     """
 
-    timestamp: int
+    timestamp: float
     mouse_pos: tuple[int]
     keys: list[str]
     button: str
 
     def clear(self) -> None:
-        """Clear the contents of this Record."""
+        """Clear the contents of this Record object."""
         self.timestamp = None
         self.mouse_pos = None
         self.keys = None
@@ -54,22 +54,24 @@ class Record:
 class Recorder:  # pylint: disable=too-many-instance-attributes
     """The Recorder class records mouse and keyboard events."""
 
-    def _on_release(self, key) -> None:  # pylint: disable=unused-argument
+    def _on_release(self, key) -> None:
+        def update_keys(key_str: str) -> None:
+            with self._active_keys_lock:
+                with self._record_lock:
+                    if self._active_keys:
+                        self._record.keys = copy.deepcopy(self._active_keys)
+                        # Filter out all instances of the released key.
+                        self._active_keys = [
+                            x for x in self._active_keys if x != key_str]
+
         try:
-            with self._active_keys_lock:
-                with self._record_lock:
-                    if self._active_keys:
-                        self._record.keys = copy.deepcopy(self._active_keys)
-                        self._active_keys.pop()
+            update_keys(str(key.char))
         except AttributeError:
-            with self._active_keys_lock:
-                with self._record_lock:
-                    if self._active_keys:
-                        self._record.keys = copy.deepcopy(self._active_keys)
-                        self._active_keys.pop()
+            update_keys(str(key))
 
     def _on_press(self, key) -> None:
         try:
+            # Capture single character keys.
             with self._active_keys_lock:
                 self._active_keys.append(str(key.char))
         except AttributeError:
