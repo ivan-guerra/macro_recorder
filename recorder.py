@@ -163,13 +163,9 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
 
             time.sleep(self._rate_sec)
 
-    def __init__(self, rate_hz: int) -> None:
-        """Initialize the Recorder with the parameter rate.
-
-        Args
-            rate_hz: The rate in Hertz at which mouse and key state will be captured.
-        """
-        self._rate_sec = 1.0 / rate_hz
+    def __init__(self) -> None:
+        """Initialize the Recorder."""
+        self._rate_sec = 1.0
         self._is_recording = False
         self._record = Record(timestamp=None,
                               mouse_pos=None,
@@ -188,8 +184,12 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         self._click_thrd = None
         self._update_thrd = None
 
-    def start(self) -> None:
+    def start(self, rate_hz: int = 100) -> None:
         """Begin recording mouse and keyboard events.
+
+        Args 
+            rate_hz: The rate at which the state of the mouse and keyboard is
+                     recorded in Hertz.
 
         Throws
             RuntimeError: When a new recording is initiated without stopping the previous recording.
@@ -199,6 +199,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
                 raise RuntimeError("recording already in progress")
             self._is_recording = True
 
+        self._rate_sec = 1.0 / rate_hz
         self._records = []
         self._active_keys = []
 
@@ -284,8 +285,8 @@ if __name__ == '__main__':
 
         time.sleep(args.start_delay_sec)
 
-        recorder = Recorder(args.rate_hz)
-        recorder.start()
+        recorder = Recorder()
+        recorder.start(args.rate_hz)
 
         time.sleep(args.duration * 60)
 
