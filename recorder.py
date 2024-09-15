@@ -25,13 +25,13 @@ class Record:
     Fields
         timestamp: The number of seconds since the Epoch.
         mouse_pos: (x, y) position of the mouse.
-        key: A list of tuples where the first element is the actively pressed
-        key and the second element is a timestamp of when the key was pressed.
+        keys: A list of tuples where the first element is the actively pressed
+              key and the second element is a timestamp of when the key was pressed.
         button: A tuple where the first element is the mouse button that is
-        interacted with and the second element is a boolean indicating whether
-        the button was pressed (true) or released (false).
+                interacted with and the second element is a boolean indicating whether
+                the button was pressed (true) or released (false).
         scroll: A tuple where the first element is the horizontal scroll delta
-        and the second element is the vertical scroll delta.
+                and the second element is the vertical scroll delta.
     """
 
     timestamp: float
@@ -49,10 +49,10 @@ class Record:
         self.scroll = None
 
 
-def save_records_to_json(json_filepath: str, records: list[Record]):
+def save_records_to_json(json_filepath: str, records: list[Record]) -> None:
     """Output a list of Record objects to a JSON file."""
     if not records:
-        raise RuntimeError("failed to save, no data has been recorded")
+        raise RuntimeError("failed to save, list of records is empty")
 
     with open(json_filepath, "w", encoding="ascii") as file:
         record_dicts = []
@@ -60,8 +60,8 @@ def save_records_to_json(json_filepath: str, records: list[Record]):
             record_dict = {
                 "timestamp": r.timestamp,
                 "mouse_pos": r.mouse_pos,
-                "button": r.button,
                 "keys": r.keys,
+                "button": r.button,
                 "scroll": r.scroll
             }
             record_dicts.append(record_dict)
@@ -71,20 +71,17 @@ def save_records_to_json(json_filepath: str, records: list[Record]):
 
 def load_records_from_json(json_filepath: str) -> list[Record]:
     """Read a list of Record objects from the parameter JSON file."""
-    data = None
     with open(json_filepath, "r", encoding="ascii") as file:
         data = json.load(file)
-
-    records = []
-    for record in data["records"]:
-        records.append(Record(
-            record["timestamp"],
-            record["mouse_pos"],
-            record["keys"],
-            record["button"],
-            record["scroll"],
-        ))
-
+        records = []
+        for record in data["records"]:
+            records.append(Record(
+                record["timestamp"],
+                record["mouse_pos"],
+                record["keys"],
+                record["button"],
+                record["scroll"],
+            ))
     return records
 
 
@@ -94,24 +91,23 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
     def _on_release(self, key) -> None:
         def update_keys(key_str: str) -> None:
             with self._active_keys_lock:
-                with self._record_lock:
-                    if self._active_keys:
+                if self._active_keys:
+                    with self._record_lock:
                         self._record.keys = copy.deepcopy(self._active_keys)
                         self._active_keys = [
                             x for x in self._active_keys if x[0] != key_str]
 
-        try:
+        if hasattr(key, "char"):
             update_keys(str(key.char))
-        except AttributeError:
+        else:
             update_keys(str(key))
 
     def _on_press(self, key) -> None:
-        try:
-            # Capture single character keys.
-            with self._active_keys_lock:
+        with self._active_keys_lock:
+            if hasattr(key, "char"):
+                # Capture single character keys.
                 self._active_keys.append((str(key.char), time.time()))
-        except AttributeError:
-            with self._active_keys_lock:
+            else:
                 # Capture special keys (e.g., shift, ctrl).
                 self._active_keys.append((str(key), time.time()))
 
@@ -171,7 +167,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         """Initialize the Recorder with the parameter rate.
 
         Args
-            rate_hz: The rate in Hertz at which records will be recorded.
+            rate_hz: The rate in Hertz at which mouse and key state will be captured.
         """
         self._rate_sec = 1.0 / rate_hz
         self._is_recording = False
@@ -243,7 +239,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
 
         Throws
             RuntimeError: When save() is called during an active recording
-            session or when there are no records to save.
+                          session or when there are no records to save.
         """
         with self._is_recording_lock:
             if self._is_recording:
@@ -254,7 +250,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description="record the mouse and keyboard",
+        description="record mouse and keyboard events",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("duration", type=int,
                         help="duration of the recording session in minutes")
@@ -268,9 +264,10 @@ if __name__ == '__main__':
         if args.duration <= 0:
             raise ValueError("duration must be a positive integer")
         if args.rate_hz <= 0:
-            raise ValueError("rate_hz must be a positive integer")
+            raise ValueError("rate-hz must be a positive integer")
         if args.start_delay_sec < 0:
-            raise ValueError("start_delay_sec must be >= 0")
+            raise ValueError(
+                "start-delay-sec must be greater than or equal to 0")
 
         outfile = time.strftime("%Y%m%d-%H%M%S") + "_recording.json"
 

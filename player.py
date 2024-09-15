@@ -16,7 +16,7 @@ from recorder import Record, load_records_from_json
 class Player:  # pylint: disable=too-many-instance-attributes
     """Playback a recording captured by a Recorder object."""
 
-    def _get_key(self, key_str: str):
+    def _get_key_obj(self, key_str: str):
         # For normal alphabetic characters, we return the character itself.
         if len(key_str) == 1:
             return key_str
@@ -84,12 +84,11 @@ class Player:  # pylint: disable=too-many-instance-attributes
 
         # Press and release the key combo.
         keyboard = pynput.keyboard.Controller()
-        for k in key_strs:
-            key_obj = self._get_key(k)
-            keyboard.press(key_obj)
-        for k in key_strs:
-            key_obj = self._get_key(k)
-            keyboard.release(key_obj)
+        key_objs = [self._get_key_obj(key) for key in key_strs]
+        for k in key_objs:
+            keyboard.press(k)
+        for k in key_objs:
+            keyboard.release(k)
 
     def _execute_event(self, record: Record, keypress_cache: dict[str, float]) -> None:
         self._move_mouse(record.mouse_pos)
@@ -153,6 +152,7 @@ class Player:  # pylint: disable=too-many-instance-attributes
         self._stop_requested = False
         self._playback_thrd = threading.Thread(
             target=self._playback)
+
         self._playback_thrd.start()
 
     def pause(self) -> None:
@@ -160,7 +160,7 @@ class Player:  # pylint: disable=too-many-instance-attributes
         with self._is_playing_lock:
             if not self._is_playing:
                 raise RuntimeError(
-                    "pause called but recording is not playing")
+                    "pause called but recording was never started")
 
         with self._pause_cv:
             if self._is_paused:
@@ -181,8 +181,18 @@ class Player:  # pylint: disable=too-many-instance-attributes
 
     def stop(self) -> None:
         """Stop the active playback."""
+        with self._is_playing_lock:
+            if not self._is_playing:
+                raise RuntimeError(
+                    "stop called but recording is not playing")
+            self._is_playing = False
+
         with self._stop_requested_lock:
             self._stop_requested = True
+
+        with self._pause_cv:
+            if self._is_paused:
+                self.pause()
 
         self._playback_thrd.join()
 
