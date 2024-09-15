@@ -190,7 +190,12 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         self._click_thrd.join()
         self._update_thrd.join()
 
-    def save(self) -> None:
+    def is_recording(self) -> bool:
+        """Return the state of this Recorder."""
+        with self._is_recording_lock:
+            return self._is_recording
+
+    def save(self, outfile: str) -> None:
         """Save all records to disk.
 
         Throws
@@ -207,7 +212,6 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         if not self._records:
             raise RuntimeError("failed to save, no data has been recorded")
 
-        outfile = time.strftime("%Y%m%d-%H%M%S") + "_recording.json"
         with open(outfile, "w", encoding="ascii") as file:
             record_dicts = []
             for r in self._records:
@@ -243,6 +247,8 @@ if __name__ == '__main__':
         if args.start_delay_sec < 0:
             raise ValueError("start_delay_sec must be >= 0")
 
+        outfile = time.strftime("%Y%m%d-%H%M%S") + "_recording.json"
+
         time.sleep(args.start_delay_sec)
 
         recorder = Recorder(args.rate_hz)
@@ -251,13 +257,13 @@ if __name__ == '__main__':
         time.sleep(args.duration * 60)
 
         recorder.stop()
-        recorder.save()
+        recorder.save(outfile)
     except KeyboardInterrupt:
         recorder.stop()
 
         answer = input(
             "recording interrupted, would you like to save all events [y/n]? ")
         if answer == "y":
-            recorder.save()
+            recorder.save(outfile)
     except (RuntimeError, ValueError) as e:
         print(f"error: {e}")
