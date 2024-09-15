@@ -49,6 +49,45 @@ class Record:
         self.scroll = None
 
 
+def save_records_to_json(json_filepath: str, records: list[Record]):
+    """Output a list of Record objects to a JSON file."""
+    if not records:
+        raise RuntimeError("failed to save, no data has been recorded")
+
+    with open(json_filepath, "w", encoding="ascii") as file:
+        record_dicts = []
+        for r in records:
+            record_dict = {
+                "timestamp": r.timestamp,
+                "mouse_pos": r.mouse_pos,
+                "button": r.button,
+                "keys": r.keys,
+                "scroll": r.scroll
+            }
+            record_dicts.append(record_dict)
+        output = {"records": record_dicts}
+        json.dump(output, file, indent=2)
+
+
+def load_records_from_json(json_filepath: str) -> list[Record]:
+    """Read a list of Record objects from the parameter JSON file."""
+    data = None
+    with open(json_filepath, "r", encoding="ascii") as file:
+        data = json.load(file)
+
+    records = []
+    for record in data["records"]:
+        records.append(Record(
+            record["timestamp"],
+            record["mouse_pos"],
+            record["keys"],
+            record["button"],
+            record["scroll"],
+        ))
+
+    return records
+
+
 class Recorder:  # pylint: disable=too-many-instance-attributes
     """The Recorder class records mouse and keyboard events."""
 
@@ -195,7 +234,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         with self._is_recording_lock:
             return self._is_recording
 
-    def save(self, outfile: str) -> None:
+    def save(self, json_filepath: str) -> None:
         """Save all records to disk.
 
         Throws
@@ -206,25 +245,7 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
             if self._is_recording:
                 raise RuntimeError("failed to save, recording in progress")
 
-        # We don't need to synchronize access to self._records with the update
-        # thread since it is guaranteed the Recorder instance was stopped
-        # before reaching this point in the code.
-        if not self._records:
-            raise RuntimeError("failed to save, no data has been recorded")
-
-        with open(outfile, "w", encoding="ascii") as file:
-            record_dicts = []
-            for r in self._records:
-                record_dict = {
-                    "timestamp": r.timestamp,
-                    "mouse_pos": r.mouse_pos,
-                    "button": r.button,
-                    "keys": r.keys,
-                    "scroll": r.scroll
-                }
-                record_dicts.append(record_dict)
-            output = {"records": record_dicts}
-            json.dump(output, file, indent=2)
+        save_records_to_json(json_filepath, self._records)
 
 
 if __name__ == '__main__':
