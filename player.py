@@ -124,6 +124,8 @@ class Player:  # pylint: disable=too-many-instance-attributes
                 self._is_playing = False
             self._wait_cv.notify()
 
+        self._playback_complete_cb()
+
     def __init__(self):
         """Construct a mouse/keyboard recording player."""
         self._records = []
@@ -137,8 +139,12 @@ class Player:  # pylint: disable=too-many-instance-attributes
         self._stop_requested_lock = threading.Lock()
         self._wait_cv = threading.Condition()
         self._playback_thrd = None
+        self._playback_complete_cb = None
 
-    def start(self, records: list[Record], speed: float = 1.0) -> None:  # pylint: disable=redefined-outer-name
+    def start(self,
+              records: list[Record],  # pylint: disable=redefined-outer-name
+              playback_complete_cb=None,
+              speed: float = 1.0) -> None:
         """Playback the recordings in the parameter list of records."""
         with self._is_playing_lock:
             if self._is_playing:
@@ -146,6 +152,7 @@ class Player:  # pylint: disable=too-many-instance-attributes
                     "cannot play a new recording while playback is active")
 
         self._records = records
+        self._playback_complete_cb = playback_complete_cb
         self._speed = speed
         self._is_playing = True
         self._is_paused = False

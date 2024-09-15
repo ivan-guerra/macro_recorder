@@ -1,83 +1,120 @@
+#!/usr/bin/env python3
+"""Define a GUI that allows the user to record and playback mouse/keyboard macros.
+
+This script provides a graphical frontend to the recorder.py and player.py
+scripts.
+"""
+
+import json
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QHBoxLayout, QWidget, QFileDialog, QSizePolicy, QMessageBox
 from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtCore import Qt
+from player import Player
+from recorder import Recorder, load_records_from_json
 
-from recorder import Recorder
 
+class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods
+    """Define the PySide6 main application window."""
 
-class MainWindow(QMainWindow):
     def __init__(self):
+        """Construct the main window and macro Recorder/Player instances."""
         super().__init__()
         self.setWindowTitle("Macro Recorder and Player")
 
-        # Create a central widget and set layout
         central_widget = QWidget()
-        layout = QHBoxLayout()  # Use QHBoxLayout to arrange buttons horizontally
-        layout.setContentsMargins(0, 0, 0, 0)  # Remove margins
-        layout.setSpacing(0)  # Remove spacing between buttons
+        # Use QHBoxLayout to arrange buttons horizontally.
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
-        # Define button images and tooltips
+        # Define button images and tooltips.
         self.button_info = [
             ("assets/camera.png", "Start/stop a new recording."),
-            ("assets/play-pause.png", "Play/pause the last recording."),
+            ("assets/play.png", "Start/stop the current recording."),
             ("assets/diskette.png", "Save current recording."),
             ("assets/open-file.png", "Load a recording."),
             ("assets/help.png", "Display program usage."),
         ]
 
-        # Create buttons with images and tooltips
-        self.buttons = []
+        self._buttons = []
         for i, (image_path, tooltip_text) in enumerate(self.button_info):
             button = QPushButton()
             pixmap = QPixmap(image_path)
-            # Scale image to 32x32
             pixmap = pixmap.scaled(
                 32, 32, Qt.AspectRatioMode.IgnoreAspectRatio)
             icon = QIcon(pixmap)
             button.setIcon(icon)
             button.setIconSize(pixmap.size())
             button.setToolTip(tooltip_text)
-            # Set initial background color
             button.setStyleSheet("background-color: white;")
+
             if i == 0:
                 button.clicked.connect(
                     lambda _, btn=button: self._toggle_recording(btn))
-            if i == 1:  # Apply color toggling to buttons 1 and 2
+            if i == 1:
                 button.clicked.connect(
-                    lambda _, btn=button: self._toggle_button_color(btn))
-            elif i == 2:  # Button 3: Open file save dialog
+                    lambda _, btn=button: self._toggle_playback(btn))
+            elif i == 2:
                 button.clicked.connect(self._open_file_save_dialog)
-            elif i == 3:  # Button 4: Open file open dialog
+            elif i == 3:
                 button.clicked.connect(self._open_file_open_dialog)
-            elif i == 4:  # Button 5: Open info dialog
+            elif i == 4:
                 button.clicked.connect(self._open_info_dialog)
+
             # Ensure button expands
             button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             layout.addWidget(button)
-            self.buttons.append(button)
+            self._buttons.append(button)
 
-        # Set the fixed window size
-        # Adjust size to accommodate the fifth button
         self.setFixedSize(250, 50)
+
         self._recorder = Recorder(rate_hz=100.0)
+        self._player = Player()
+        self._playback_records = []
+        self._has_unsaved_data = False
 
     def _toggle_recording(self, button) -> None:
         current_color = button.styleSheet().split(': ')[1].strip(';')
         if current_color == "white":
             self._recorder.start()
+            self._has_unsaved_data = True
         else:
             self._recorder.stop()
+            self._playback_records = self._recorder.get_records()
 
-        new_color = 'gray' if current_color == 'white' else 'white'
+        new_color = "gray" if current_color == "white" else "white"
         button.setStyleSheet(f"background-color: {new_color};")
 
-    def _toggle_button_color(self, button) -> None:
-        # Toggle the button's background color between gray and white
+    def _toggle_playback(self, button) -> None:
+        if self._recorder.is_recording():
+            QMessageBox.critical(
+                self, "Error", "Cannot playback while recording is in progress.")
+            return
+
+        if not self._playback_records:
+            QMessageBox.critical(
+                self, "Error",
+                "No data available. Try recording some data or loading data from a file.")
+            return
+
+        play_icon = QIcon(QPixmap("assets/play.png"))
+        stop_icon = QIcon(QPixmap("assets/stop.png"))
+
+        def playback_complete_cb():
+            button.setIcon(play_icon)
+            button.setStyleSheet("background-color: white;")
+
         current_color = button.styleSheet().split(': ')[1].strip(';')
-        new_color = 'gray' if current_color == 'white' else 'white'
-        button.setStyleSheet(f"background-color: {new_color};")
+        if current_color == "white":
+            button.setIcon(stop_icon)
+            button.setStyleSheet("background-color: gray;")
+            self._player.start(self._playback_records, playback_complete_cb)
+        else:
+            button.setIcon(play_icon)
+            button.setStyleSheet("background-color: white;")
+            self._player.stop()
 
     def _open_file_save_dialog(self) -> None:
         if self._recorder.is_recording():
@@ -85,26 +122,50 @@ class MainWindow(QMainWindow):
                 self, "Error", "Cannot save while a recording is in progress.")
             return
 
+        if not self._has_unsaved_data:
+            QMessageBox.information(
+                self, "Information", "Ignoring save request, there's no recording to save.")
+            return
+
         options = QFileDialog.Options()
         filename, _ = QFileDialog.getSaveFileName(
             self, "Save File", "", "All Files (*);;Text Files (*.txt)", options=options)
         if filename:
             self._recorder.save(filename)
+            self._has_unsaved_data = False
 
     def _open_file_open_dialog(self) -> None:
         if self._recorder.is_recording():
             QMessageBox.critical(
-                self, "Error", "Cannot load recording while a recording is in progress.")
+                self, "Error", "Cannot load files while a recording is in progress.")
             return
+
+        if self._has_unsaved_data:
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setWindowTitle("Warning")
+            msg_box.setText(
+                "You have unsaved data. Would you like to overwrite it?")
+            msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            result = msg_box.exec()
+            if result == QMessageBox.Yes:
+                self._playback_records = []
+                self._has_unsaved_data = False
+            else:
+                return
 
         options = QFileDialog.Options()
         filename, _ = QFileDialog.getOpenFileName(
             self, "Open File", "", "All Files (*);;Text Files (*.txt)", options=options)
+
         if filename:
-            print(f"File opened: {filename}")
+            try:
+                self._playback_records = load_records_from_json(filename)
+            except (json.decoder.JSONDecodeError, ValueError, TypeError, UnicodeDecodeError) as e:
+                QMessageBox.critical(
+                    self, "Error", f"Failed to read recording: {e}")
 
     def _open_info_dialog(self) -> None:
-        # Open an info dialog box
         QMessageBox.information(
             self, "Information", "TODO")
 

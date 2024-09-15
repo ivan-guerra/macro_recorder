@@ -199,6 +199,9 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
                 raise RuntimeError("recording already in progress")
             self._is_recording = True
 
+        self._records = []
+        self._active_keys = []
+
         self._keypress_thrd = threading.Thread(
             target=self._record_key_events)
         self._click_thrd = threading.Thread(
@@ -233,6 +236,14 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         """Return the state of this Recorder."""
         with self._is_recording_lock:
             return self._is_recording
+
+    def get_records(self) -> list[Record]:
+        """Return all recorded Record objects."""
+        with self._is_recording_lock:
+            if self._is_recording:
+                raise RuntimeError(
+                    "cannot return records during active recording")
+        return self._records
 
     def save(self, json_filepath: str) -> None:
         """Save all records to disk.
