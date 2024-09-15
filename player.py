@@ -137,9 +137,7 @@ class Player:  # pylint: disable=too-many-instance-attributes
         self._stop_requested = False
         self._stop_requested_lock = threading.Lock()
         self._wait_cv = threading.Condition()
-
-        self._playback_thrd = threading.Thread(
-            target=self._playback)
+        self._playback_thrd = None
 
     def start(self, records: list[Record], speed: float = 1.0) -> None:  # pylint: disable=redefined-outer-name
         """Playback the recordings in the parameter list of records."""
@@ -153,6 +151,8 @@ class Player:  # pylint: disable=too-many-instance-attributes
         self._is_playing = True
         self._is_paused = False
         self._stop_requested = False
+        self._playback_thrd = threading.Thread(
+            target=self._playback)
         self._playback_thrd.start()
 
     def pause(self) -> None:

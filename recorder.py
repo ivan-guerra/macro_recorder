@@ -188,12 +188,9 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
         self._active_keys_lock = threading.Lock()
         self._terminate_cv = threading.Condition()
 
-        self._keypress_thrd = threading.Thread(
-            target=self._record_key_events)
-        self._click_thrd = threading.Thread(
-            target=self._record_mouse_events)
-        self._update_thrd = threading.Thread(
-            target=self._update_records)
+        self._keypress_thrd = None
+        self._click_thrd = None
+        self._update_thrd = None
 
     def start(self) -> None:
         """Begin recording mouse and keyboard events.
@@ -205,6 +202,13 @@ class Recorder:  # pylint: disable=too-many-instance-attributes
             if self._is_recording:
                 raise RuntimeError("recording already in progress")
             self._is_recording = True
+
+        self._keypress_thrd = threading.Thread(
+            target=self._record_key_events)
+        self._click_thrd = threading.Thread(
+            target=self._record_mouse_events)
+        self._update_thrd = threading.Thread(
+            target=self._update_records)
 
         self._keypress_thrd.start()
         self._click_thrd.start()
