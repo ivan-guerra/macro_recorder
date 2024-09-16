@@ -111,11 +111,22 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
         self._recorder = Recorder()
         self._player = Player()
         self._playback_records = []
+        self._playback_complete_ts = 0.0
         self._has_unsaved_data = False
         self._record_rate_hz = 100
         self._playback_multiplier = 1.0
 
     def _toggle_recording(self, button) -> None:
+        # If the user records using the GUI's record button, the last action in
+        # the recording will be clicking the record button to toggle recording
+        # off. This is problematic during playback because at the end of the
+        # playback, a new recording will be triggered. A simple solution is to
+        # not allow recordings for a tenth of a second after playback has
+        # completed.
+        dt = time.time() - self._playback_complete_ts
+        if dt < 0.1:
+            return
+
         current_color = button.styleSheet().split(': ')[1].strip(';')
         if current_color == "white":
             self._recorder.start(rate_hz=self._record_rate_hz)
@@ -147,6 +158,7 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
         self._player.start(
             self._playback_records, speed=self._playback_multiplier)
         self._player.wait()
+        self._playback_complete_ts = time.time()
         button.setStyleSheet("background-color: white;")
 
     def _open_file_save_dialog(self) -> None:
