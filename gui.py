@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
             self._recorder.stop()
             self._playback_records = self._recorder.get_records()
 
-        new_color = "gray" if current_color == "white" else "white"
+        new_color = "red" if current_color == "white" else "white"
         button.setStyleSheet(f"background-color: {new_color};")
 
     def _playback(self, button) -> None:
