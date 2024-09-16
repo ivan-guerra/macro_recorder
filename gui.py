@@ -93,7 +93,7 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
                     lambda _, btn=button: self._toggle_recording(btn))
             if i == 1:
                 button.clicked.connect(
-                    lambda _, btn=button: self._toggle_playback(btn))
+                    lambda _, btn=button: self._playback(btn))
             elif i == 2:
                 button.clicked.connect(self._open_file_save_dialog)
             elif i == 3:
@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
         new_color = "gray" if current_color == "white" else "white"
         button.setStyleSheet(f"background-color: {new_color};")
 
-    def _toggle_playback(self, button) -> None:
+    def _playback(self, button) -> None:
         if self._recorder.is_recording():
             QMessageBox.critical(
                 self, "Error", "Cannot playback while recording is in progress.")
@@ -143,23 +143,11 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
                 "No data available. Try recording some data or loading data from a file.")
             return
 
-        play_icon = QIcon(QPixmap("assets/play.png"))
-        stop_icon = QIcon(QPixmap("assets/stop.png"))
-
-        def playback_complete_cb():
-            button.setIcon(play_icon)
-            button.setStyleSheet("background-color: white;")
-
-        current_color = button.styleSheet().split(': ')[1].strip(';')
-        if current_color == "white":
-            button.setIcon(stop_icon)
-            button.setStyleSheet("background-color: gray;")
-            self._player.start(
-                self._playback_records, playback_complete_cb, speed=self._playback_multiplier)
-        else:
-            button.setIcon(play_icon)
-            button.setStyleSheet("background-color: white;")
-            self._player.stop()
+        button.setStyleSheet("background-color: gray;")
+        self._player.start(
+            self._playback_records, speed=self._playback_multiplier)
+        self._player.wait()
+        button.setStyleSheet("background-color: white;")
 
     def _open_file_save_dialog(self) -> None:
         if self._recorder.is_recording():
