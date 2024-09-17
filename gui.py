@@ -7,13 +7,13 @@ scripts.
 
 import time
 import json
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton,
                                QHBoxLayout, QWidget, QFileDialog,
                                QSizePolicy, QMessageBox, QDialog,
                                QLineEdit, QFormLayout, QVBoxLayout)
-from recorder import Recorder, load_records_from_json
+from recorder import Record, Recorder, load_records_from_json
 from player import Player
 
 
@@ -49,6 +49,33 @@ class ProgramSettingsDialog(QDialog):  # pylint: disable=too-few-public-methods
     def get_inputs(self) -> tuple[str, str]:
         """Return a tuple containing the playback speed and recording rate strings."""
         return self._speed_input.text(), self._rate_input.text()
+
+
+class PlaybackWorker(QThread):  # pylint: disable=too-few-public-methods
+    """Qt worker thread used to playback a recording."""
+
+    finished = Signal()
+
+    def __init__(self,
+                 player: Player,
+                 playback_complete_ts: float,
+                 playback_records: list[Record],
+                 playback_multiplier: float):
+        """Construct the thread with all relevant playback data."""
+        super().__init__()
+        self._player = player
+        self._playback_complete_ts = playback_complete_ts
+        self._playback_records = playback_records
+        self._playback_multiplier = playback_multiplier
+
+    def run(self):
+        """Run the player and wait (block) until it completes playback."""
+        self._player.start(
+            self._playback_records, speed=self._playback_multiplier)
+        self._player.wait()
+        self._playback_complete_ts[0] = time.time()
+
+        self.finished.emit()
 
 
 class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-many-instance-attributes
@@ -111,7 +138,7 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
         self._recorder = Recorder()
         self._player = Player()
         self._playback_records = []
-        self._playback_complete_ts = 0.0
+        self._playback_complete_ts = [0.0]
         self._has_unsaved_data = False
         self._record_rate_hz = 100
         self._playback_multiplier = 1.0
@@ -123,7 +150,7 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
         # playback, a new recording will be triggered. A simple solution is to
         # not allow recordings for a tenth of a second after playback has
         # completed.
-        dt = time.time() - self._playback_complete_ts
+        dt = time.time() - self._playback_complete_ts[0]
         if dt < 0.1:
             return
 
@@ -142,6 +169,9 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
         new_color = "red" if current_color == "white" else "white"
         button.setStyleSheet(f"background-color: {new_color};")
 
+    def _playback_complete(self) -> None:
+        self._buttons[1].setStyleSheet("background-color: white;")
+
     def _playback(self, button) -> None:
         if self._recorder.is_recording():
             QMessageBox.critical(
@@ -154,12 +184,13 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
                 "No data available. Try recording some data or loading data from a file.")
             return
 
-        button.setStyleSheet("background-color: gray;")
-        self._player.start(
-            self._playback_records, speed=self._playback_multiplier)
-        self._player.wait()
-        self._playback_complete_ts = time.time()
-        button.setStyleSheet("background-color: white;")
+        button.setStyleSheet("background-color: green;")
+        self._playback_thrd = PlaybackWorker(self._player,
+                                             self._playback_complete_ts,
+                                             self._playback_records,
+                                             self._playback_multiplier)
+        self._playback_thrd.finished.connect(self._playback_complete)
+        self._playback_thrd.start()
 
     def _open_file_save_dialog(self) -> None:
         if self._recorder.is_recording():
