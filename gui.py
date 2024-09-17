@@ -159,10 +159,6 @@ class MainWindow(QMainWindow):  # pylint: disable=too-few-public-methods, too-ma
             self._recorder.start(rate_hz=self._record_rate_hz)
             self._has_unsaved_data = True
         else:
-            # Insert a single frame's delay. This ensures that mouse up event
-            # is recorded when the user clicks to stop a recording.
-            time.sleep(1.0 / self._record_rate_hz)
-
             self._recorder.stop()
             self._playback_records = self._recorder.get_records()
 
